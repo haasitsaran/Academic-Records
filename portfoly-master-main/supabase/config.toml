@@ -1,0 +1,10 @@
+project_id = "jrcyqjydunbqcdxedicr"
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.generate-career-suggestions]
+verify_jwt = true
+
+[functions.websocket-notifications]
+verify_jwt = false

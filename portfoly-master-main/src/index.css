@@ -1,0 +1,220 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smart Student Hub Design System */
+
+@layer base {
+  :root {
+    /* Core Academic Theme */
+    --background: 220 15% 97%;
+    --foreground: 215 25% 15%;
+
+    /* Academic Primary - Deep Blue */
+    --primary: 215 85% 35%;
+    --primary-foreground: 210 40% 98%;
+    --primary-light: 215 85% 45%;
+    
+    /* Educational Secondary - Purple */
+    --secondary: 260 60% 45%;
+    --secondary-foreground: 210 40% 98%;
+    --secondary-light: 260 60% 55%;
+
+    /* Success & Achievement - Green */
+    --success: 142 85% 40%;
+    --success-foreground: 210 40% 98%;
+    --success-light: 142 85% 50%;
+
+    /* Warning & Pending - Orange */
+    --warning: 35 90% 55%;
+    --warning-foreground: 215 25% 15%;
+    --warning-light: 35 90% 65%;
+
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+    --card-elevated: 220 15% 99%;
+
+    /* Interactive Elements */
+    --muted: 220 15% 92%;
+    --muted-foreground: 215 15% 45%;
+    --accent: 260 60% 95%;
+    --accent-foreground: 215 25% 15%;
+
+    /* Borders & Inputs */
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 215 85% 35%;
+
+    /* Destructive */
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success-light)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--card-elevated)) 100%);
+
+    /* Shadows */
+    --shadow-card: 0 4px 15px -5px hsl(var(--primary) / 0.15);
+    --shadow-elevated: 0 8px 25px -8px hsl(var(--primary) / 0.25);
+    --shadow-achievement: 0 0 20px hsl(var(--success) / 0.3);
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark mode academic theme */
+    --background: 215 25% 8%;
+    --foreground: 210 40% 98%;
+
+    --primary: 215 85% 65%;
+    --primary-foreground: 215 25% 8%;
+    --primary-light: 215 85% 75%;
+    
+    --secondary: 260 60% 65%;
+    --secondary-foreground: 215 25% 8%;
+    --secondary-light: 260 60% 75%;
+
+    --success: 142 85% 60%;
+    --success-foreground: 215 25% 8%;
+    --success-light: 142 85% 70%;
+
+    --warning: 35 90% 65%;
+    --warning-foreground: 215 25% 8%;
+    --warning-light: 35 90% 75%;
+
+    --card: 215 25% 12%;
+    --card-foreground: 210 40% 98%;
+    --card-elevated: 215 25% 15%;
+
+    --muted: 215 25% 20%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 260 60% 15%;
+    --accent-foreground: 210 40% 98%;
+
+    --border: 215 25% 18%;
+    --input: 215 25% 18%;
+    --ring: 215 85% 65%;
+
+    --destructive: 0 85% 65%;
+    --destructive-foreground: 215 25% 8%;
+
+    --popover: 215 25% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success-light)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--card-elevated)) 100%);
+
+    --shadow-card: 0 4px 15px -5px hsl(var(--primary) / 0.25);
+    --shadow-elevated: 0 8px 25px -8px hsl(var(--primary) / 0.35);
+    --shadow-achievement: 0 0 20px hsl(var(--success) / 0.4);
+
+    /* Keep existing sidebar variables for compatibility */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom scrollbar for modern look */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary-light));
+  }
+}
+
+@layer components {
+  /* Hero section styles */
+  .hero-gradient {
+    background: var(--gradient-hero);
+  }
+  
+  .card-gradient {
+    background: var(--gradient-card);
+  }
+
+  /* Achievement styles */
+  .achievement-glow {
+    box-shadow: var(--shadow-achievement);
+  }
+
+  /* Elevated card styles */
+  .card-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* Animation classes */
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0; 
+      transform: translateY(20px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
+}
