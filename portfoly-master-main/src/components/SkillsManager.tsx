@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, X, Code, Database, Globe, Smartphone, Settings, BarChart } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 interface Skill {
   id: string;
@@ -72,6 +73,7 @@ export const SkillsManager = () => {
         .from('student_skills')
         .select('*')
         .eq('student_id', user?.id)
+        .eq('is_technical', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -189,6 +191,21 @@ export const SkillsManager = () => {
   const filteredSkills = selectedCategory === 'All' 
     ? skills 
     : skills.filter(skill => getSkillCategory(skill.skill_name) === selectedCategory);
+
+  const levelToPercent = (level: string) => {
+    switch (level) {
+      case 'Beginner':
+        return 25;
+      case 'Intermediate':
+        return 50;
+      case 'Advanced':
+        return 75;
+      case 'Expert':
+        return 100;
+      default:
+        return 0;
+    }
+  };
 
   if (loading) {
     return (
@@ -325,9 +342,9 @@ export const SkillsManager = () => {
                   <h4 className="font-medium text-sm text-muted-foreground mb-3">{category}</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {categorySkills.map((skill) => (
-                      <div key={skill.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
+                      <div key={skill.id} className="p-3 border rounded-lg">
+                        <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             {PREDEFINED_SKILLS.find(ps => ps.name === skill.skill_name)?.icon && (
                               <div className="p-1">
                                 {(() => {
@@ -336,15 +353,15 @@ export const SkillsManager = () => {
                                 })()}
                               </div>
                             )}
-                            <span className="font-medium">{skill.skill_name}</span>
+                            <span className="font-medium truncate">{skill.skill_name}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mt-2 md:mt-0 shrink-0">
                           <Select 
                             value={skill.proficiency_level} 
                             onValueChange={(value) => updateSkillLevel(skill.id, value)}
                           >
-                            <SelectTrigger className="w-28">
+                            <SelectTrigger className="min-w-[7rem]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -362,6 +379,16 @@ export const SkillsManager = () => {
                           >
                             <X className="h-4 w-4" />
                           </Button>
+                        </div>
+                        <div className="mt-3">
+                          <Progress 
+                            value={levelToPercent(skill.proficiency_level)}
+                            indicatorClassName="bg-blue-500"
+                            trackClassName="bg-blue-500/15"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {skill.proficiency_level}
+                          </div>
                         </div>
                       </div>
                     ))}

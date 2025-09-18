@@ -53,6 +53,11 @@ interface StudentData {
     points: number;
     skills?: string[];
   }>;
+  techSkills: Array<{
+    id: string;
+    skill_name: string;
+    proficiency_level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  }>;
 }
 
 export const DigitalPortfolio = () => {
@@ -91,10 +96,24 @@ export const DigitalPortfolio = () => {
 
       if (achievementsError) throw achievementsError;
 
+      // Fetch technical skills (for read-only bars)
+      const { data: skills, error: skillsError } = await supabase
+        .from('student_skills')
+        .select('id, skill_name, proficiency_level')
+        .eq('student_id', user?.id)
+        .eq('is_technical', true)
+        .order('created_at', { ascending: false });
+
+      if (skillsError) {
+        // Non-fatal: continue without skills
+        console.warn('portfolio skills fetch error:', skillsError);
+      }
+
       setStudentData({
         profile: studentProfile.profiles,
         student: studentProfile,
-        achievements: achievements || []
+        achievements: achievements || [],
+        techSkills: (skills as any) || []
       });
 
     } catch (error) {
@@ -202,8 +221,18 @@ export const DigitalPortfolio = () => {
   }
 
   const { profile: profileData, student, achievements } = studentData;
+  const techSkills = studentData.techSkills || [];
   const careerScore = Math.min(85, achievements.length * 5 + (student.technical_skills?.length || 0) * 2);
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const levelToPercent = (level: string) => {
+    switch (level) {
+      case 'Beginner': return 25;
+      case 'Intermediate': return 50;
+      case 'Advanced': return 75;
+      case 'Expert': return 100;
+      default: return 0;
+    }
+  };
 
   return (
     <div className="container mx-auto px-6 py-8 animate-fade-in">
@@ -317,21 +346,8 @@ export const DigitalPortfolio = () => {
             </div>
           </Card>
 
-          {/* Skills Overview */}
-          <Card className="p-6 card-gradient">
-            <h3 className="text-lg font-semibold text-card-foreground mb-4">Technical Skills</h3>
-            {student.technical_skills && student.technical_skills.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {student.technical_skills.map((skill, index) => (
-                  <Badge key={index} variant="secondary">
-                    {skill}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-sm">No technical skills added yet.</p>
-            )}
-          </Card>
+          {/* Technical Skills Manager (interactive) */}
+          <SkillsManager />
 
           {/* Interests */}
           {student.interests && student.interests.length > 0 && (
@@ -430,6 +446,35 @@ export const DigitalPortfolio = () => {
                 </Card>
               )}
             </div>
+          </div>
+
+          {/* Technical Skills (Bars under featured area) */}
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
+              <Star className="h-6 w-6 text-primary" />
+              Technical Skills Overview
+            </h2>
+            <Card className="p-6 card-gradient">
+              {techSkills.length > 0 ? (
+                <div className="space-y-4">
+                  {techSkills.map(s => (
+                    <div key={s.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium">{s.skill_name}</span>
+                        <span className="text-xs text-muted-foreground">{s.proficiency_level}</span>
+                      </div>
+                      <Progress 
+                        value={levelToPercent(s.proficiency_level)}
+                        indicatorClassName="bg-blue-500"
+                        trackClassName="bg-blue-500/15"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No technical skills added yet.</p>
+              )}
+            </Card>
           </div>
 
           {/* Bio Section */}
