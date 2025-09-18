@@ -11,9 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { GraduationCap, Users, X, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Auth = () => {
   const { user, profile, signIn, signUp } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -30,7 +32,7 @@ const Auth = () => {
     confirmPassword: '',
     fullName: '',
     phone: '',
-    role: '' as 'student' | 'teacher' | '',
+    role: '' as 'student' | 'teacher' | 'recruiter' | '',
     rollNumber: '',
     employeeId: '',
     department: '',
@@ -106,11 +108,19 @@ const Auth = () => {
       additionalData.employee_id = signupData.employeeId;
     }
 
+    // Recruiter: demo flow without auth persistence
+    if (signupData.role === 'recruiter') {
+      toast({ title: "Welcome, Recruiter!", description: "Redirecting to recruiter dashboard..." });
+      setLoading(false);
+      navigate('/recruiter');
+      return;
+    }
+
     const { error } = await signUp(
       signupData.email, 
       signupData.password, 
       signupData.fullName, 
-      signupData.role,
+      signupData.role as 'student' | 'teacher',
       additionalData
     );
 
@@ -170,7 +180,7 @@ const Auth = () => {
           <div className="mx-auto w-12 h-12 bg-primary rounded-full flex items-center justify-center">
             <GraduationCap className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold">Smart Student Hub</h1>
+          <h1 className="text-2xl font-bold">Team Pinnacle</h1>
           <p className="text-muted-foreground">Access your academic journey</p>
         </div>
 
@@ -222,7 +232,7 @@ const Auth = () => {
             <TabsContent value="signup">
               <CardHeader>
                 <CardTitle>Create Account</CardTitle>
-                <CardDescription>Join Smart Student Hub</CardDescription>
+                <CardDescription>Join Team Pinnacle</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSignup} className="space-y-4">
@@ -239,7 +249,7 @@ const Auth = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="signup-role">I am a</Label>
-                    <Select value={signupData.role} onValueChange={(value: 'student' | 'teacher') => setSignupData({...signupData, role: value})}>
+                    <Select value={signupData.role} onValueChange={(value: 'student' | 'teacher' | 'recruiter') => setSignupData({...signupData, role: value})}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select your role" />
                       </SelectTrigger>
@@ -254,6 +264,12 @@ const Auth = () => {
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
                             Teacher
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="recruiter">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Recruiter (Demo)
                           </div>
                         </SelectItem>
                       </SelectContent>
@@ -362,6 +378,11 @@ const Auth = () => {
                         value={signupData.employeeId}
                         onChange={(e) => setSignupData({...signupData, employeeId: e.target.value})}
                       />
+                    </div>
+                  )}
+                  {signupData.role === 'recruiter' && (
+                    <div className="text-sm text-muted-foreground">
+                      No verification needed for demo. You will be redirected to the Recruiter dashboard on signup.
                     </div>
                   )}
 

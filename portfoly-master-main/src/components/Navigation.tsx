@@ -22,7 +22,9 @@ import {
   User,
   Settings,
   Sun,
-  Moon
+  Moon,
+  ListOrdered,
+  Flag
 } from "lucide-react";
 
 export const Navigation = () => {
@@ -38,6 +40,7 @@ export const Navigation = () => {
       return [
         { path: "/", label: "Home", icon: Home },
         { path: "/dashboard", label: "Dashboard", icon: BarChart },
+        { path: "/compete", label: "Compete", icon: Flag },
         { path: "/achievements", label: "Achievements", icon: Trophy },
         { path: "/academic-results", label: "Academic Results", icon: BookOpen },
         { path: "/career-guidance", label: "Career Guidance", icon: Compass },
@@ -153,6 +156,15 @@ export const Navigation = () => {
                   </Link>
                 </DropdownMenuItem>
                 
+              <DropdownMenuItem asChild>
+                <Link to="/leaderboard" className="cursor-pointer">
+                  <ListOrdered className="mr-2 h-4 w-4" />
+                  Leaderboard
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
                 <DropdownMenuItem 
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                   className="cursor-pointer"

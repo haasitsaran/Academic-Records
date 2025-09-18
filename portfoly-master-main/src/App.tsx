@@ -11,11 +11,16 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Achievements from "./pages/Achievements";
 import Portfolio from "./pages/Portfolio";
+import Compete from "./pages/Compete";
 import Profile from "./pages/Profile";
 import Faculty from "./pages/Faculty";
 import AcademicResults from "./pages/AcademicResults";
 import CareerGuidance from "./pages/CareerGuidance";
 import NotFound from "./pages/NotFound";
+import Leaderboard from "./pages/Leaderboard";
+import Recruiter from "./pages/Recruiter";
+import RecruiterCollege from "./pages/RecruiterCollege";
+import RecruiterStudent from "./pages/RecruiterStudent";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +48,14 @@ const AppRoutes = () => (
       } 
     />
     <Route 
+      path="/compete" 
+      element={
+        <ProtectedRoute allowedRoles={['student', 'teacher']}>
+          <Compete />
+        </ProtectedRoute>
+      } 
+    />
+    <Route 
       path="/academic-results" 
       element={
         <ProtectedRoute allowedRoles={['student']}>
@@ -66,6 +79,19 @@ const AppRoutes = () => (
         </ProtectedRoute>
       } 
     />
+    <Route 
+      path="/leaderboard" 
+      element={
+        <ProtectedRoute allowedRoles={['student', 'teacher']}>
+          <Leaderboard />
+        </ProtectedRoute>
+      }
+    />
+
+    {/* Public recruiter showcase routes (no auth) */}
+    <Route path="/recruiter" element={<Recruiter />} />
+    <Route path="/recruiter/college/:slug" element={<RecruiterCollege />} />
+    <Route path="/recruiter/student/:id" element={<RecruiterStudent />} />
     <Route 
       path="/profile" 
       element={
