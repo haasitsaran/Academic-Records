@@ -43,7 +43,8 @@ export function AchievementUpload() {
     category: '',
     date: '',
     description: '',
-    points: ''
+    points: '',
+    certificateId: ''
   });
 
   const achievementTypes = [
@@ -273,6 +274,15 @@ export function AchievementUpload() {
       return;
     }
 
+    if (!formData.certificateId || formData.certificateId.trim() === '') {
+      toast({
+        title: "Certificate ID Required",
+        description: "Please enter a certificate ID before submitting.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -286,19 +296,21 @@ export function AchievementUpload() {
         setUploadProgress(60);
       }
 
+      const toNull = (v: string) => (v && v.trim() !== '' ? v : null);
       const achievementData = {
         student_id: user.id,
         title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        achievement_type: formData.type,
-        date_achieved: formData.date,
+        description: toNull(formData.description),
+        category: toNull(formData.category),
+        achievement_type: toNull(formData.type),
+        date_achieved: toNull(formData.date),
         points: parseInt(formData.points) || 0,
         verification_method: verificationMethod,
         assigned_teacher_id: verificationMethod === 'teacher' ? selectedTeacher : null,
         status: 'pending' as const,
         certificate_url: certificateUrl,
-        skills: selectedTags
+        skills: selectedTags,
+        certificate_id: formData.certificateId.trim()
       };
 
       setUploadProgress(80);
@@ -310,6 +322,30 @@ export function AchievementUpload() {
         .single();
 
       if (error) throw error;
+
+      // Notify the assigned teacher in real-time via backend (if teacher verification)
+      if (verificationMethod === 'teacher' && selectedTeacher && inserted?.id) {
+        try {
+          const backendUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+          const httpBase = (backendUrl || '').replace(/^wss?:\/\//, match => match === 'wss://' ? 'https://' : 'http://');
+          const notifyUrl = httpBase ? httpBase.replace(/\/ws$/, '/notify') : 'http://localhost:8000/notify';
+          await fetch(notifyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teacher_id: selectedTeacher,
+              data: {
+                achievement_id: inserted.id,
+                title: formData.title,
+                student_id: user.id,
+                submitted_at: new Date().toISOString()
+              }
+            })
+          });
+        } catch (err) {
+          console.warn('Notify teacher failed (non-fatal):', err);
+        }
+      }
 
       setUploadProgress(100);
       setTimeout(() => {
@@ -332,19 +368,20 @@ export function AchievementUpload() {
           category: '',
           date: '',
           description: '',
-          points: ''
+          points: '',
+          certificateId: ''
         });
         setSelectedTags([]);
         setSelectedTeacher('');
         setSelectedFile(null);
       }, 500);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting achievement:', error);
       setIsUploading(false);
       toast({
         title: "Submission Failed",
-        description: "Failed to submit achievement. Please try again.",
+        description: typeof error?.message === 'string' ? error.message : 'Failed to submit achievement. Please check required fields and try again.',
         variant: "destructive"
       });
     }
@@ -379,6 +416,9 @@ export function AchievementUpload() {
               Teachers online: <strong>{teachers.length}</strong>
             </span>
             <span className="text-xs text-muted-foreground">Presence: {wsStatus}</span>
+            {usingHttpFallback && (
+              <span className="text-xs px-2 py-1 rounded border bg-muted/40">HTTP fallback</span>
+            )}
             <Button variant="outline" size="sm" onClick={() => { console.log('[UI] Refresh presence'); wsRef.current?.send({ type: 'list_teachers' }); }}>
               Refresh
             </Button>
@@ -637,6 +677,18 @@ export function AchievementUpload() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              {/* Certificate ID */}
+              <div className="space-y-2">
+                <Label htmlFor="certificateId">Certificate ID</Label>
+                <Input
+                  id="certificateId"
+                  placeholder="Enter unique certificate ID"
+                  value={formData.certificateId}
+                  onChange={(e) => setFormData({ ...formData, certificateId: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Required. Used by faculty to verify and avoid duplicate submissions.</p>
               </div>
 
               {/* Submit */}

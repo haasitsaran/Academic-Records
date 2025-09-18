@@ -21,7 +21,6 @@ import {
   User,
   Calendar,
   Eye,
-  TrendingUp,
   Award,
   Download
 } from "lucide-react";
@@ -41,9 +40,6 @@ interface Achievement {
   profiles: {
     full_name: string;
     email: string;
-  } | null;
-  students: {
-    roll_number: string;
   } | null;
 }
 
@@ -83,6 +79,15 @@ export const FacultyPanelReal = () => {
       wsRef.current = client;
       client.connect((msg) => {
         console.log('[FACULTY WS] message', msg);
+        if ((msg as any)?.type === 'new_submission') {
+          const data = (msg as any).data || {};
+          toast({
+            title: 'New submission received',
+            description: `${data.title || 'Achievement'} submitted by ${data.student_id || 'student'}`,
+          });
+          // Optionally refresh teacher queue here if fetching is enabled
+          fetchAchievements();
+        }
       }, (status) => {
         console.log('[FACULTY WS] status', status);
       });
@@ -115,7 +120,13 @@ export const FacultyPanelReal = () => {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [isOnline, user, profile]);
+  }, [isOnline, user, profile?.role]);
+
+  // Initial load of achievements assigned to this teacher
+  useEffect(() => {
+    if (!user || profile?.role !== 'teacher') return;
+    fetchAchievements();
+  }, [user, profile?.role]);
 
   const fetchAchievements = async () => {
     try {
@@ -127,9 +138,6 @@ export const FacultyPanelReal = () => {
           profiles:student_id (
             full_name,
             email
-          ),
-          students:student_id (
-            roll_number
           )
         `)
         .eq('assigned_teacher_id', user?.id)
@@ -175,7 +183,7 @@ export const FacultyPanelReal = () => {
           console.log('Real-time achievement change:', p);
           // We currently do not fetch achievements; guard anyway
           if (p?.new?.assigned_teacher_id === user?.id || p?.old?.assigned_teacher_id === user?.id) {
-            // fetchAchievements();
+            fetchAchievements();
           }
         }
       )
@@ -287,9 +295,9 @@ export const FacultyPanelReal = () => {
             <span className="text-sm">{isOnline ? 'Online' : 'Offline'}</span>
             <Switch checked={isOnline} onCheckedChange={setIsOnline} />
           </div>
-          <Button variant="outline" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Analytics
+          <Button variant="outline" className="flex items-center gap-2" onClick={() => fetchAchievements()}>
+            <Clock className="h-4 w-4" />
+            Refresh
           </Button>
           <Button variant="outline" className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
@@ -340,10 +348,9 @@ export const FacultyPanelReal = () => {
 
       {/* Main Content */}
       <Tabs defaultValue="pending" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="pending">Pending Review ({pendingCount})</TabsTrigger>
           <TabsTrigger value="reviewed">Recently Reviewed ({reviewedAchievements.length})</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         {/* Search Bar */}
@@ -368,88 +375,87 @@ export const FacultyPanelReal = () => {
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-lg">
                       <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-card-foreground">{achievement.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">
-                          {achievement.profiles?.full_name} ({achievement.students?.roll_number})
-                        </span>
-                      </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-card-foreground">{achievement.title}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">{achievement.profiles?.full_name}</span>
                     </div>
                   </div>
-                  <Badge variant="secondary">
-                    {achievement.category}
-                  </Badge>
                 </div>
+                <Badge variant="secondary">
+                  {achievement.category}
+                </Badge>
+              </div>
 
-                <div className="space-y-3 mb-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{achievement.achievement_type}</Badge>
-                    <Badge variant="outline">{achievement.category}</Badge>
+              <div className="space-y-3 mb-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{achievement.achievement_type}</Badge>
+                  <Badge variant="outline">{achievement.category}</Badge>
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  {achievement.description}
+                </p>
+
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(achievement.created_at).toLocaleDateString()}
                   </div>
-                  
-                  <p className="text-sm text-muted-foreground">
-                    {achievement.description}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(achievement.created_at).toLocaleDateString()}
-                    </div>
-                    {achievement.certificate_url && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => downloadCertificate(achievement.certificate_url, achievement.title)}
-                        className="text-xs h-auto p-1"
-                      >
-                        <Download className="h-3 w-3 mr-1" />
-                        Certificate
-                      </Button>
-                    )}
-                  </div>
+                  {achievement.certificate_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadCertificate(achievement.certificate_url, achievement.title)}
+                      className="text-xs h-auto p-1"
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Certificate
+                    </Button>
+                  )}
                 </div>
+              </div>
 
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="flex items-center gap-2 flex-1"
-                    onClick={() => setSelectedSubmission(achievement)}
-                  >
-                    <Eye className="h-4 w-4" />
-                    Review
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    className="bg-success hover:bg-success/90 text-success-foreground"
-                    onClick={() => handleUpdateStatus(achievement.id, 'approved')}
-                  >
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="destructive"
-                    onClick={() => handleUpdateStatus(achievement.id, 'rejected')}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="flex items-center gap-2 flex-1"
+                  onClick={() => setSelectedSubmission(achievement)}
+                >
+                  <Eye className="h-4 w-4" />
+                  Review
+                </Button>
+                <Button 
+                  size="sm" 
+                  className="bg-success hover:bg-success/90 text-success-foreground"
+                  onClick={() => handleUpdateStatus(achievement.id, 'approved')}
+                >
+                  <CheckCircle className="h-4 w-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  onClick={() => handleUpdateStatus(achievement.id, 'rejected')}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {pendingAchievements.length === 0 && (
+          <div className="text-center py-12">
+            <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Pending Reviews</h3>
+            <p className="text-muted-foreground">All submissions have been reviewed!</p>
           </div>
+        )}
+      </TabsContent>
 
-          {pendingAchievements.length === 0 && (
-            <div className="text-center py-12">
-              <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Pending Reviews</h3>
-              <p className="text-muted-foreground">All submissions have been reviewed!</p>
-            </div>
-          )}
-        </TabsContent>
 
         {/* Recently Reviewed Tab */}
         <TabsContent value="reviewed">
@@ -486,49 +492,6 @@ export const FacultyPanelReal = () => {
           </Card>
         </TabsContent>
 
-        {/* Analytics Tab */}
-        <TabsContent value="analytics">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="p-6 card-gradient">
-              <h3 className="text-lg font-semibold text-card-foreground mb-4">Review Statistics</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Submissions</span>
-                  <span className="font-semibold">{achievements.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Approved</span>
-                  <span className="font-semibold text-success">{approvedCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Rejected</span>
-                  <span className="font-semibold text-destructive">{rejectedCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pending</span>
-                  <span className="font-semibold text-warning">{pendingCount}</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6 card-gradient">
-              <h3 className="text-lg font-semibold text-card-foreground mb-4">Category Breakdown</h3>
-              <div className="space-y-4">
-                {Object.entries(
-                  achievements.reduce((acc, achievement) => {
-                    acc[achievement.category] = (acc[achievement.category] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
-                ).map(([category, count]) => (
-                  <div key={category} className="flex justify-between">
-                    <span className="text-muted-foreground">{category}</span>
-                    <span className="font-semibold">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* Review Modal */}

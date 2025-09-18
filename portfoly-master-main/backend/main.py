@@ -32,6 +32,8 @@ app.add_middleware(
 # Replace with Redis for multi-instance deployments.
 # user_id -> { full_name, department, last_seen }
 presence: Dict[str, Dict[str, Optional[str]]] = {}
+# In-memory connection registry: user_id -> set of WebSocket connections
+connections: Dict[str, set] = {}
 
 
 async def verify_user(token: str):
@@ -127,6 +129,9 @@ async def ws_endpoint(ws: WebSocket):
                         "last_seen": int(time.time() * 1000),
                     }
                     print(f"[backend] teacher online: {user_id} -> {presence[user_id]}")
+                # track connection for this user
+                if user_id:
+                    connections.setdefault(user_id, set()).add(ws)
                 else:
                     print(f"[backend] authenticated non-teacher: {user_id}")
                 await ws.send_text(json.dumps({"type": "authenticated", "userId": user_id, "role": user_role}))
@@ -160,6 +165,14 @@ async def ws_endpoint(ws: WebSocket):
         if user_id and user_role == "teacher":
             presence.pop(user_id, None)
             print(f"[backend] teacher offline: {user_id}")
+        # remove connection
+        if user_id and user_id in connections and ws in connections[user_id]:
+            try:
+                connections[user_id].remove(ws)
+                if not connections[user_id]:
+                    connections.pop(user_id, None)
+            except Exception:
+                pass
 
 
 @app.get("/ws")
@@ -177,6 +190,30 @@ async def list_teachers_http(request: Request, type: Optional[str] = None):
             teachers.append({"user_id": uid, **meta})
         return {"type": "teachers_online", "teachers": teachers}
     return {"type": "error", "message": "Invalid request"}, 400
+
+@app.post("/notify")
+async def notify_teacher(payload: dict):
+    """HTTP endpoint to push a message to a specific teacher if online.
+    Expected payload: { "teacher_id": str, "data": { ... } }
+    Sends WS message: { type: "new_submission", data }
+    """
+    teacher_id = payload.get("teacher_id")
+    data = payload.get("data")
+    if not teacher_id or data is None:
+        return {"ok": False, "error": "teacher_id and data are required"}, 400
+    sent = 0
+    conns = connections.get(teacher_id) or set()
+    for sock in list(conns):
+        try:
+            await sock.send_text(json.dumps({"type": "new_submission", "data": data}))
+            sent += 1
+        except Exception:
+            # drop dead sockets
+            try:
+                conns.remove(sock)
+            except Exception:
+                pass
+    return {"ok": True, "delivered": sent}
 
 
 @app.get("/")
