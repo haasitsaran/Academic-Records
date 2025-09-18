@@ -19,6 +19,7 @@ interface Teacher {
   full_name: string;
   department?: string;
   designation?: string;
+  last_seen?: number;
 }
 
 export function AchievementUpload() {
@@ -35,6 +36,7 @@ export function AchievementUpload() {
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed' | 'error' | 'reconnecting' | 'idle'>('idle');
+  const [usingHttpFallback, setUsingHttpFallback] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     type: '',
@@ -84,20 +86,26 @@ export function AchievementUpload() {
     const client = new WSClient(url);
     wsRef.current = client;
     client.connect((msg: WSResponse) => {
+      console.log('[WS] message', msg);
       if (msg.type === 'authenticated') {
+        console.log('[WS] authenticated as', msg.role, msg.userId);
         client.send({ type: 'list_teachers' });
       } else if (msg.type === 'teachers_online') {
         const online = msg.teachers.map(t => ({
           user_id: t.user_id,
           full_name: t.full_name,
           department: t.department || undefined,
-          designation: undefined,
+          designation: (t as any).designation,
+          last_seen: (t as any).last_seen,
         }));
-        if (online.length > 0) {
-          setTeachers(online);
-        }
+        console.log('[WS] teachers_online', online);
+        setTeachers(online); // always set, even if empty
+        setUsingHttpFallback(false);
+      } else if (msg.type === 'error') {
+        console.warn('[WS] error', msg.message);
       }
     }, (status) => {
+      console.log('[WS] status', status);
       setWsStatus(status);
     });
     return () => client.close();
@@ -116,9 +124,11 @@ export function AchievementUpload() {
           user_id: t.user_id,
           full_name: t.full_name,
           department: t.department || undefined,
-          designation: undefined,
+          designation: t.designation,
+          last_seen: t.last_seen,
         }));
         setTeachers(online);
+        setUsingHttpFallback(true);
       }
     } catch (e) {
       console.warn('HTTP presence fallback failed', e);
@@ -132,6 +142,18 @@ export function AchievementUpload() {
     fetchPresenceHttp();
     return () => clearInterval(iv);
   }, [wsStatus]);
+
+  const timeAgo = (ts?: number) => {
+    if (!ts) return 'just now';
+    const diff = Math.max(0, Date.now() - ts);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins === 1) return '1 min ago';
+    if (mins < 60) return `${mins} mins ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs === 1) return '1 hour ago';
+    return `${hrs} hours ago`;
+  };
 
   const fetchTeachers = async () => {
     try {
@@ -357,7 +379,7 @@ export function AchievementUpload() {
               Teachers online: <strong>{teachers.length}</strong>
             </span>
             <span className="text-xs text-muted-foreground">Presence: {wsStatus}</span>
-            <Button variant="outline" size="sm" onClick={() => wsRef.current?.send({ type: 'list_teachers' })}>
+            <Button variant="outline" size="sm" onClick={() => { console.log('[UI] Refresh presence'); wsRef.current?.send({ type: 'list_teachers' }); }}>
               Refresh
             </Button>
           </div>

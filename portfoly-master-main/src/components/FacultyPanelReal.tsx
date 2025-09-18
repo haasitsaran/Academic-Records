@@ -81,7 +81,11 @@ export const FacultyPanelReal = () => {
       const url = wsUrl || computed || 'ws://localhost:54321/functions/v1/websocket-notifications';
       const client = new WSClient(url);
       wsRef.current = client;
-      client.connect();
+      client.connect((msg) => {
+        console.log('[FACULTY WS] message', msg);
+      }, (status) => {
+        console.log('[FACULTY WS] status', status);
+      });
       // Heartbeat ping every 30s
       const pingIv = setInterval(() => {
         wsRef.current?.send({ type: 'ping' } as any);
@@ -167,17 +171,11 @@ export const FacultyPanelReal = () => {
           table: 'achievements'
         },
         (payload) => {
-          console.log('Real-time achievement change:', payload);
-          // Only refresh if the change is relevant to this teacher
-          if (payload.new?.assigned_teacher_id === user?.id || payload.old?.assigned_teacher_id === user?.id) {
-            fetchAchievements();
-          }
-          
-          if (payload.eventType === 'INSERT') {
-            toast({
-              title: "New Submission",
-              description: `New achievement submitted: ${payload.new.title}`,
-            });
+          const p: any = payload as any;
+          console.log('Real-time achievement change:', p);
+          // We currently do not fetch achievements; guard anyway
+          if (p?.new?.assigned_teacher_id === user?.id || p?.old?.assigned_teacher_id === user?.id) {
+            // fetchAchievements();
           }
         }
       )
