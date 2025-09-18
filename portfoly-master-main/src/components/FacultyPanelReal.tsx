@@ -200,7 +200,6 @@ export const FacultyPanelReal = () => {
         .from('achievements')
         .update({
           status,
-          review_comments: comments || null,
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString()
         })
