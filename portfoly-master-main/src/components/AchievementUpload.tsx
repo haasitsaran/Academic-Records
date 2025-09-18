@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X, FileText, Award, Clock, CheckCircle, Users, Bot, Calendar, Tag, Trash2 } from "lucide-react";
+import { WSClient, WSResponse } from "@/integrations/ws/client";
 
 interface Teacher {
   user_id: string;
@@ -23,6 +24,9 @@ interface Teacher {
 export function AchievementUpload() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const wsRef = useRef<WSClient | null>(null);
+  const wsUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+  const supabaseUrlEnv = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -30,6 +34,7 @@ export function AchievementUpload() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed' | 'error' | 'reconnecting' | 'idle'>('idle');
   const [formData, setFormData] = useState({
     title: '',
     type: '',
@@ -73,7 +78,60 @@ export function AchievementUpload() {
 
   useEffect(() => {
     fetchTeachers();
+    // Connect to websocket to get live teacher presence
+    const computed = supabaseUrlEnv ? `${supabaseUrlEnv.replace(/\/$/, '')}/functions/v1/websocket-notifications` : undefined;
+    const url = wsUrl || computed || 'ws://localhost:54321/functions/v1/websocket-notifications';
+    const client = new WSClient(url);
+    wsRef.current = client;
+    client.connect((msg: WSResponse) => {
+      if (msg.type === 'authenticated') {
+        client.send({ type: 'list_teachers' });
+      } else if (msg.type === 'teachers_online') {
+        const online = msg.teachers.map(t => ({
+          user_id: t.user_id,
+          full_name: t.full_name,
+          department: t.department || undefined,
+          designation: undefined,
+        }));
+        if (online.length > 0) {
+          setTeachers(online);
+        }
+      }
+    }, (status) => {
+      setWsStatus(status);
+    });
+    return () => client.close();
   }, []);
+
+  // HTTP presence fallback
+  const fetchPresenceHttp = async () => {
+    try {
+      const ws = wsUrl || (supabaseUrlEnv ? `${supabaseUrlEnv.replace(/\/$/, '')}/functions/v1/websocket-notifications` : 'http://localhost:54321/functions/v1/websocket-notifications');
+      const httpUrl = ws.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+      const res = await fetch(`${httpUrl}?type=list_teachers`, { method: 'GET' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.type === 'teachers_online') {
+        const online: Teacher[] = (data.teachers || []).map((t: any) => ({
+          user_id: t.user_id,
+          full_name: t.full_name,
+          department: t.department || undefined,
+          designation: undefined,
+        }));
+        setTeachers(online);
+      }
+    } catch (e) {
+      console.warn('HTTP presence fallback failed', e);
+    }
+  };
+
+  // If WS not open, attempt HTTP fallback periodically
+  useEffect(() => {
+    if (wsStatus === 'open') return;
+    const iv = setInterval(fetchPresenceHttp, 5000);
+    fetchPresenceHttp();
+    return () => clearInterval(iv);
+  }, [wsStatus]);
 
   const fetchTeachers = async () => {
     try {
@@ -99,6 +157,33 @@ export function AchievementUpload() {
       setTeachers(formattedTeachers);
     } catch (error) {
       console.error('Error fetching teachers:', error);
+    }
+  };
+
+  const simulateAiVerification = async (achievementId: string) => {
+    // Fake latency and decision
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+    await delay(2000);
+    const approved = Math.random() > 0.2; // 80% approve
+    try {
+      const { error } = await supabase
+        .from('achievements')
+        .update({
+          status: approved ? 'approved' : 'rejected',
+          review_comments: approved ? 'Auto-verified by AI model (demo)' : 'AI model could not verify (demo)',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: null,
+          verification_method: 'ml_model'
+        })
+        .eq('id', achievementId);
+      if (error) throw error;
+      toast({
+        title: approved ? 'AI Approved' : 'AI Rejected',
+        description: approved ? 'Your achievement was auto-verified by AI (demo).' : 'AI could not verify. Please switch to teacher verification.',
+        variant: approved ? 'default' : 'destructive'
+      });
+    } catch (e) {
+      console.error('AI verification simulation failed:', e);
     }
   };
 
@@ -196,9 +281,11 @@ export function AchievementUpload() {
 
       setUploadProgress(80);
 
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('achievements')
-        .insert(achievementData);
+        .insert(achievementData)
+        .select('id')
+        .single();
 
       if (error) throw error;
 
@@ -211,6 +298,10 @@ export function AchievementUpload() {
             ? "Your achievement has been sent to the selected teacher for review."
             : "Your achievement is being processed by our AI verification system.",
         });
+        if (verificationMethod === 'ml_model' && inserted?.id) {
+          // Simulate AI verification with a delay
+          simulateAiVerification(inserted.id);
+        }
         
         // Reset form
         setFormData({
@@ -251,12 +342,26 @@ export function AchievementUpload() {
     <div className="container mx-auto px-4 md:px-6 py-6 md:py-8 animate-fade-in">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-          Add New Achievement
-        </h1>
-        <p className="text-muted-foreground">
-          Upload and validate your academic and professional accomplishments
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+              Add New Achievement
+            </h1>
+            <p className="text-muted-foreground">
+              Upload and validate your academic and professional accomplishments
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm border">
+              <span className={`h-2 w-2 rounded-full ${teachers.length > 0 ? 'bg-green-500' : 'bg-muted-foreground'}`}></span>
+              Teachers online: <strong>{teachers.length}</strong>
+            </span>
+            <span className="text-xs text-muted-foreground">Presence: {wsStatus}</span>
+            <Button variant="outline" size="sm" onClick={() => wsRef.current?.send({ type: 'list_teachers' })}>
+              Refresh
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 md:gap-8">
@@ -406,7 +511,15 @@ export function AchievementUpload() {
                       </SelectContent>
                     </Select>
                     {teachers.length === 0 && (
-                      <p className="text-sm text-muted-foreground">No teachers found. Please contact your administrator.</p>
+                      <div className="text-sm border rounded-lg p-3 bg-muted/20">
+                        <p className="text-muted-foreground">
+                          No teachers are online right now. You can try refreshing, or switch to AI verification.
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <Button variant="outline" size="sm" onClick={() => wsRef.current?.send({ type: 'list_teachers' })}>Refresh</Button>
+                          <Button variant="ghost" size="sm" onClick={() => setVerificationMethod('ml_model')}>Use AI Verification</Button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

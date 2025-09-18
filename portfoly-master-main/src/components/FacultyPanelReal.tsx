@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { WSClient } from "@/integrations/ws/client";
 import { 
   Search, 
   Filter,
@@ -46,8 +48,11 @@ interface Achievement {
 }
 
 export const FacultyPanelReal = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
+  const wsRef = useRef<WSClient | null>(null);
+  const wsUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+  const supabaseUrlEnv = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -56,16 +61,61 @@ export const FacultyPanelReal = () => {
   const [reviewComment, setReviewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    const saved = localStorage.getItem('faculty_online');
+    return saved ? saved === 'true' : false;
+  });
+  const lastActiveRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    if (user) {
-      fetchAchievements();
-      setupRealtimeSubscription();
+    // Do not fetch achievements for now as requested
+    setLoading(false);
+  }, [user, profile]);
+
+  // Presence connection controlled by toggle
+  useEffect(() => {
+    if (!user || profile?.role !== 'teacher') return;
+    localStorage.setItem('faculty_online', String(isOnline));
+    if (isOnline) {
+      const computed = supabaseUrlEnv ? `${supabaseUrlEnv.replace(/\/$/, '')}/functions/v1/websocket-notifications` : undefined;
+      const url = wsUrl || computed || 'ws://localhost:54321/functions/v1/websocket-notifications';
+      const client = new WSClient(url);
+      wsRef.current = client;
+      client.connect();
+      // Heartbeat ping every 30s
+      const pingIv = setInterval(() => {
+        wsRef.current?.send({ type: 'ping' } as any);
+      }, 30000);
+      // Track activity
+      const markActive = () => { lastActiveRef.current = Date.now(); };
+      window.addEventListener('mousemove', markActive);
+      window.addEventListener('keydown', markActive);
+      // Auto offline after 10 minutes idle
+      const idleIv = setInterval(() => {
+        if (Date.now() - lastActiveRef.current > 10 * 60 * 1000) {
+          setIsOnline(false);
+        }
+      }, 60000);
+      
+      return () => {
+        clearInterval(pingIv);
+        clearInterval(idleIv);
+        window.removeEventListener('mousemove', markActive);
+        window.removeEventListener('keydown', markActive);
+      };
+    } else {
+      wsRef.current?.close();
+      wsRef.current = null;
     }
-  }, [user]);
+    return () => {
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [isOnline, user, profile]);
 
   const fetchAchievements = async () => {
     try {
+      // Only fetch achievements assigned to this teacher
       const { data, error } = await supabase
         .from('achievements')
         .select(`
@@ -78,13 +128,14 @@ export const FacultyPanelReal = () => {
             roll_number
           )
         `)
+        .eq('assigned_teacher_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       setAchievements((data as any[]) || []);
       
-      // Calculate stats
+      // Calculate stats with filtered list
       const pending = data?.filter(a => a.status === 'pending').length || 0;
       const approved = data?.filter(a => a.status === 'approved').length || 0;
       const rejected = data?.filter(a => a.status === 'rejected').length || 0;
@@ -117,7 +168,10 @@ export const FacultyPanelReal = () => {
         },
         (payload) => {
           console.log('Real-time achievement change:', payload);
-          fetchAchievements(); // Refresh data
+          // Only refresh if the change is relevant to this teacher
+          if (payload.new?.assigned_teacher_id === user?.id || payload.old?.assigned_teacher_id === user?.id) {
+            fetchAchievements();
+          }
           
           if (payload.eventType === 'INSERT') {
             toast({
@@ -210,6 +264,17 @@ export const FacultyPanelReal = () => {
     );
   }
 
+  if (user && profile?.role !== 'teacher') {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-2">Faculty Access Only</h2>
+          <p className="text-muted-foreground">This panel is restricted to faculty accounts.</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-6 py-8 animate-fade-in">
       {/* Header */}
@@ -218,7 +283,12 @@ export const FacultyPanelReal = () => {
           <h1 className="text-3xl font-bold text-foreground mb-2">Faculty Review Panel</h1>
           <p className="text-muted-foreground">Review and validate student achievement submissions</p>
         </div>
-        <div className="flex gap-3 mt-4 md:mt-0">
+        <div className="flex gap-3 mt-4 md:mt-0 items-center">
+          <div className="flex items-center gap-2 border rounded-full px-3 py-1">
+            <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-muted-foreground'}`}></span>
+            <span className="text-sm">{isOnline ? 'Online' : 'Offline'}</span>
+            <Switch checked={isOnline} onCheckedChange={setIsOnline} />
+          </div>
           <Button variant="outline" className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
             Analytics

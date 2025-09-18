@@ -11,6 +11,20 @@ serve(async (req) => {
   const upgradeHeader = headers.get("upgrade") || "";
 
   if (upgradeHeader.toLowerCase() !== "websocket") {
+    // HTTP fallback for presence read
+    const url = new URL(req.url);
+    if (url.searchParams.get('type') === 'list_teachers') {
+      // deno-lint-ignore no-explicit-any
+      const presence = (globalThis as any).teacherPresence as Map<string, { full_name: string; department?: string | null; last_seen: number }> | undefined;
+      const entries = presence ? [...presence.entries()] : [];
+      const teachers = entries.map(([id, meta]) => ({
+        user_id: id,
+        full_name: meta.full_name,
+        department: meta.department || null,
+        last_seen: meta.last_seen
+      }));
+      return new Response(JSON.stringify({ type: 'teachers_online', teachers }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     return new Response("Expected WebSocket connection", { 
       status: 400,
       headers: corsHeaders 
@@ -25,6 +39,13 @@ serve(async (req) => {
 
   let userId: string | null = null;
   let userRole: string | null = null;
+  // In-memory presence (per function instance). Good enough for demo purposes.
+  // Map user_id -> { role, full_name, department }
+  // deno-lint-ignore no-explicit-any
+  type PresenceMeta = { full_name: string; department?: string | null; last_seen: number };
+  const presence = (globalThis as any).teacherPresence || new Map<string, PresenceMeta>();
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).teacherPresence = presence;
 
   socket.onopen = () => {
     console.log("WebSocket connection opened");
@@ -46,11 +67,19 @@ serve(async (req) => {
             // Get user role
             const { data: profile } = await supabase
               .from('profiles')
-              .select('role')
+              .select('role, full_name, department')
               .eq('user_id', user.id)
               .single();
             
             userRole = profile?.role || 'student';
+            if (userRole === 'teacher') {
+              // Upsert presence for this teacher
+              presence.set(userId, {
+                full_name: (profile as any)?.full_name || 'Teacher',
+                department: (profile as any)?.department || null,
+                last_seen: Date.now()
+              });
+            }
             socket.send(JSON.stringify({ 
               type: 'authenticated', 
               userId, 
@@ -104,6 +133,22 @@ serve(async (req) => {
           .subscribe();
 
         socket.send(JSON.stringify({ type: 'subscribed', channel: 'achievements' }));
+      } else if (data.type === 'list_teachers') {
+        // Return currently online teachers
+        const entries = [...presence.entries()] as [string, PresenceMeta][];
+        const teachers = entries.map(([id, meta]) => ({
+          user_id: id,
+          full_name: meta.full_name,
+          department: meta.department || null,
+          last_seen: meta.last_seen
+        }));
+        socket.send(JSON.stringify({ type: 'teachers_online', teachers }));
+      } else if (data.type === 'ping' && userId && userRole === 'teacher') {
+        const meta = presence.get(userId);
+        if (meta) {
+          meta.last_seen = Date.now();
+          presence.set(userId, meta);
+        }
       }
     } catch (error) {
       console.error('Error processing message:', error);
@@ -113,6 +158,9 @@ serve(async (req) => {
 
   socket.onclose = () => {
     console.log("WebSocket connection closed");
+    if (userId && userRole === 'teacher') {
+      presence.delete(userId);
+    }
   };
 
   socket.onerror = (error) => {
