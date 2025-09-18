@@ -61,6 +61,10 @@ Thumbs.db
 *.swp
 *.swo
 
+backend/venv/
+portfoly-master-main/backend/venv/
+**/venv/
+**/.venv/
 
 # Dependency & Build Directories
 ################################
