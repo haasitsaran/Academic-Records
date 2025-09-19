@@ -3,6 +3,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
@@ -22,7 +25,9 @@ import {
   Github,
   ExternalLink,
   TrendingUp,
-  User
+  User,
+  Briefcase,
+  Plus
 } from "lucide-react";
 
 interface StudentData {
@@ -60,16 +65,58 @@ interface StudentData {
   }>;
 }
 
+interface ExperienceItem {
+  id: string;
+  company: string;
+  role: string;
+  start: string; // ISO date string
+  end?: string;  // ISO date string
+  description?: string;
+}
+
 export const DigitalPortfolio = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [studentData, setStudentData] = useState<StudentData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Local-only Experience state (not persisted to DB)
+  const [experiences, setExperiences] = useState<ExperienceItem[]>([]);
+  const [expForm, setExpForm] = useState<{
+    company: string;
+    role: string;
+    start: string;
+    end: string;
+    description: string;
+  }>({ company: "", role: "", start: "", end: "", description: "" });
   useEffect(() => {
     if (user && profile) {
       fetchStudentData();
     }
   }, [user, profile]);
+
+  // Load experiences from localStorage (per user)
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(`portfolio_experiences_${user.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ExperienceItem[];
+        setExperiences(parsed);
+      }
+    } catch (e) {
+      console.warn('failed to load experiences from storage', e);
+    }
+  }, [user?.id]);
+
+  // Save experiences to localStorage when changed
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      localStorage.setItem(`portfolio_experiences_${user.id}`, JSON.stringify(experiences));
+    } catch (e) {
+      console.warn('failed to save experiences to storage', e);
+    }
+  }, [experiences, user?.id]);
 
   const fetchStudentData = async () => {
     try {
@@ -145,6 +192,10 @@ export const DigitalPortfolio = () => {
             .header { text-align: center; margin-bottom: 30px; }
             .section { margin-bottom: 20px; }
             .achievement { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; }
+            .experience { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; }
+            .skill { margin-bottom: 8px; }
+            .bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+            .bar > div { height: 100%; background: #3b82f6; }
           </style>
         </head>
         <body>
@@ -167,6 +218,19 @@ export const DigitalPortfolio = () => {
               <p>${studentData.student.career_goals}</p>
             </div>
           ` : ''}
+
+          ${experiences && experiences.length > 0 ? `
+            <div class="section">
+              <h2>Experience</h2>
+              ${experiences.map(exp => `
+                <div class="experience">
+                  <h3>${exp.role} <span style="color:#6b7280; font-weight: normal;">@ ${exp.company}</span></h3>
+                  <p><strong>Dates:</strong> ${new Date(exp.start).toLocaleDateString()} — ${exp.end ? new Date(exp.end).toLocaleDateString() : 'Present'}</p>
+                  ${exp.description ? `<p>${exp.description}</p>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
           
           ${studentData?.achievements && studentData.achievements.length > 0 ? `
             <div class="section">
@@ -179,6 +243,21 @@ export const DigitalPortfolio = () => {
                   <p><strong>Date:</strong> ${new Date(achievement.date_achieved).toLocaleDateString()}</p>
                   ${achievement.description ? `<p>${achievement.description}</p>` : ''}
                   ${achievement.skills ? `<p><strong>Skills:</strong> ${achievement.skills.join(', ')}</p>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          ${techSkills && techSkills.length > 0 ? `
+            <div class="section">
+              <h2>Technical Skills</h2>
+              ${techSkills.map(s => `
+                <div class="skill">
+                  <div style="display:flex; justify-content:space-between; font-size: 14px;">
+                    <span>${s.skill_name}</span>
+                    <span>${s.proficiency_level}</span>
+                  </div>
+                  <div class="bar"><div style="width:${(function(l){switch(l){case 'Beginner':return 25;case 'Intermediate':return 50;case 'Advanced':return 75;case 'Expert':return 100;default:return 0;}})(s.proficiency_level)}%"></div></div>
                 </div>
               `).join('')}
             </div>
@@ -232,6 +311,28 @@ export const DigitalPortfolio = () => {
       case 'Expert': return 100;
       default: return 0;
     }
+  };
+
+  const addExperience = () => {
+    if (!expForm.company.trim() || !expForm.role.trim() || !expForm.start) {
+      toast({
+        title: "Missing fields",
+        description: "Please provide company, role, and start date.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const newItem: ExperienceItem = {
+      id: crypto.randomUUID(),
+      company: expForm.company.trim(),
+      role: expForm.role.trim(),
+      start: expForm.start,
+      end: expForm.end || undefined,
+      description: expForm.description?.trim() || undefined,
+    };
+    setExperiences(prev => [newItem, ...prev]);
+    setExpForm({ company: "", role: "", start: "", end: "", description: "" });
+    toast({ title: "Experience added" });
   };
 
   return (
@@ -446,6 +547,96 @@ export const DigitalPortfolio = () => {
                 </Card>
               )}
             </div>
+          </div>
+
+          {/* Experience Section (local only) */}
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
+              <Briefcase className="h-6 w-6 text-primary" />
+              Experience
+            </h2>
+            <Card className="p-6 card-gradient mb-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm">Company</Label>
+                  <Input
+                    placeholder="Company name"
+                    value={expForm.company}
+                    onChange={(e) => setExpForm({ ...expForm, company: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Role</Label>
+                  <Input
+                    placeholder="Your role/title"
+                    value={expForm.role}
+                    onChange={(e) => setExpForm({ ...expForm, role: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Start Date</Label>
+                  <Input
+                    type="date"
+                    value={expForm.start}
+                    onChange={(e) => setExpForm({ ...expForm, start: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">End Date (optional)</Label>
+                  <Input
+                    type="date"
+                    value={expForm.end}
+                    onChange={(e) => setExpForm({ ...expForm, end: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-sm">Description (optional)</Label>
+                  <Textarea
+                    placeholder="What did you work on? Key achievements, stack, impact..."
+                    rows={3}
+                    value={expForm.description}
+                    onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end mt-4">
+                <Button onClick={addExperience} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Experience
+                </Button>
+              </div>
+            </Card>
+
+            {experiences.length > 0 ? (
+              <div className="space-y-4">
+                {experiences.map((exp) => (
+                  <Card key={exp.id} className="p-6 card-gradient">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-card-foreground mb-1">
+                          {exp.role} <span className="text-muted-foreground font-normal">@ {exp.company}</span>
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground mb-2">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(exp.start).toLocaleDateString()} — {exp.end ? new Date(exp.end).toLocaleDateString() : 'Present'}
+                            </span>
+                          </div>
+                        </div>
+                        {exp.description && (
+                          <p className="text-muted-foreground">{exp.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="p-6 card-gradient">
+                <p className="text-muted-foreground">No experience added yet. Use the form above to add one.</p>
+              </Card>
+            )}
           </div>
 
           {/* Technical Skills (Bars under featured area) */}
