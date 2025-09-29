@@ -21,6 +21,7 @@ import Leaderboard from "./pages/Leaderboard";
 import Recruiter from "./pages/Recruiter";
 import RecruiterCollege from "./pages/RecruiterCollege";
 import RecruiterStudent from "./pages/RecruiterStudent";
+import { ChatAssistant } from "@/components/ChatAssistant";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +122,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <AppRoutes />
+            <ChatAssistant />
           </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
